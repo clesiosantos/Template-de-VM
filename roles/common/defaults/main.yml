@@ -1,0 +1,14 @@
+---
+# Valores padrão para a role common
+pacotes_rede:
+  - net-tools
+  - tcpdump
+  - nmap
+  - traceroute
+  - whois
+  - dnsutils
+  - netcat
+  - curl
+  - wget
+  - telnet
+  - iperf3

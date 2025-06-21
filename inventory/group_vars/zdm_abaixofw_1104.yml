@@ -1,0 +1,9 @@
+---
+network_name: "zdm-abaixofw-1104"
+network_prefix: "177.184.13"
+ip_address: "177.184.13.101/24"  # Usado apenas se auto_assign_ip for false
+gateway: "177.184.13.1"
+dns_servers: 
+  - "201.49.216.57"
+  - "201.49.216.58"
+novo_hostname: "zdm-fw"  # O número do IP será adicionado automaticamente

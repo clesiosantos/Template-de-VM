@@ -1,0 +1,76 @@
+---
+- name: Verificar IPs disponíveis na rede
+  hosts: localhost
+  gather_facts: no
+  vars:
+    start_ip: 101
+    end_ip: 254
+    ip_registry_file: "ip_registry/{{ network_name }}.json"
+    
+  tasks:
+    - name: Verificar se o diretório de registro existe
+      file:
+        path: ip_registry
+        state: directory
+        mode: '0755'
+      
+    - name: Verificar se o arquivo de registro de IPs existe
+      stat:
+        path: "{{ ip_registry_file }}"
+      register: registry_file
+      
+    - name: Criar arquivo de registro se não existir
+      copy:
+        content: "{}"
+        dest: "{{ ip_registry_file }}"
+      when: not registry_file.stat.exists
+      
+    - name: Carregar registro de IPs
+      set_fact:
+        ip_registry: "{{ lookup('file', ip_registry_file) | from_json }}"
+        
+    - name: Iniciar lista de IPs para verificação
+      set_fact:
+        ips_to_check: "{{ range(start_ip, end_ip + 1) | list }}"
+        
+    - name: Remover IPs já registrados da lista de verificação
+      set_fact:
+        ips_to_check: "{{ ips_to_check | difference(ip_registry.values() | map('regex_search', '\d+$') | map('int') | list) }}"
+      when: ip_registry != {}
+        
+    - name: Verificar IPs disponíveis com ping
+      shell: "ping -c 1 -W 1 {{ network_prefix }}.{{ item }} > /dev/null 2>&1 || echo {{ item }}"
+      register: ping_results
+      with_items: "{{ ips_to_check }}"
+      ignore_errors: yes
+      
+    - name: Filtrar IPs disponíveis
+      set_fact:
+        available_ips: "{{ ping_results.results | selectattr('stdout', 'defined') | selectattr('stdout', 'ne', '') | map(attribute='stdout') | list }}"
+        
+    - name: Determinar primeiro IP disponível
+      set_fact:
+        first_available_ip: "{{ available_ips[0] | default('') }}"
+      when: available_ips | length > 0
+        
+    - name: Exibir IP disponível
+      debug:
+        msg: "Primeiro IP disponível na rede {{ network_name }}: {{ network_prefix }}.{{ first_available_ip }}"
+      when: first_available_ip is defined and first_available_ip != ''
+        
+    - name: Exibir mensagem se não houver IPs disponíveis
+      debug:
+        msg: "Não há IPs disponíveis na rede {{ network_name }} no intervalo {{ network_prefix }}.{{ start_ip }} a {{ network_prefix }}.{{ end_ip }}"
+      when: first_available_ip is not defined or first_available_ip == ''
+        
+    - name: Salvar resultado para uso no playbook principal
+      set_fact:
+        available_ip: "{{ network_prefix }}.{{ first_available_ip }}/24"
+        available_ip_last_octet: "{{ first_available_ip }}"
+      when: first_available_ip is defined and first_available_ip != ''
+      
+    - name: Registrar IP como "pendente" no arquivo de registro
+      copy:
+        content: "{{ ip_registry | combine({ansible_date_time.iso8601_basic_short: first_available_ip}) | to_nice_json }}"
+        dest: "{{ ip_registry_file }}"
+      when: first_available_ip is defined and first_available_ip != ''

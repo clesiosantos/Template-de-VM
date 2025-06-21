@@ -1,0 +1,8 @@
+---
+network_name: "servidores-1608"
+network_prefix: "192.168.11"
+ip_address: "192.168.11.101/24"  # Usado apenas se auto_assign_ip for false
+gateway: "192.168.11.1"
+dns_servers: 
+  - "192.168.11.51"
+novo_hostname: "srv-1608"  # O número do IP será adicionado automaticamente

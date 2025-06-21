@@ -1,0 +1,8 @@
+---
+# Valores padrão para a role network
+auto_assign_ip: true
+interface_rede: "ens192"
+ip_address: "192.168.1.100/24"
+gateway: "192.168.1.1"
+dns_servers: ["8.8.8.8", "8.8.4.4"]
+novo_hostname: "ubuntu-server"

@@ -1,0 +1,36 @@
+---
+- name: Configuração de rede para servidores Ubuntu 24.04
+  hosts: "{{ target_hosts | default('all') }}"
+  become: yes
+  
+  roles:
+    - common
+    - network
+    - vmware
+    
+  post_tasks:
+    # Registrar IP como "atribuído" no arquivo de registro
+    - name: Registrar IP como atribuído
+      delegate_to: localhost
+      shell: |
+        REGISTRY_FILE="ip_registry/{{ network_name }}.json"
+        if [ -f "$REGISTRY_FILE" ]; then
+          IP_LAST_OCTET="{{ available_ip_last_octet | default(ip_address | regex_search('\d+$')) }}"
+          HOSTNAME="{{ inventory_hostname }}"
+          jq '. + {"'$HOSTNAME'": "'$IP_LAST_OCTET'"}' $REGISTRY_FILE > $REGISTRY_FILE.tmp
+          mv $REGISTRY_FILE.tmp $REGISTRY_FILE
+        fi
+      args:
+        executable: /bin/bash
+      when: auto_assign_ip | default(true)
+
+    # Reiniciar o servidor se necessário
+    - name: Verificar se reboot é necessário
+      stat:
+        path: /var/run/reboot-required
+      register: reboot_required
+
+    - name: Reiniciar servidor se necessário
+      reboot:
+        reboot_timeout: 300
+      when: reboot_required.stat.exists

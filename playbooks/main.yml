@@ -1,0 +1,7 @@
+---
+- name: Verificar IP disponível
+  import_playbook: ip_scanner.yml
+  when: auto_assign_ip | default(true)
+
+- name: Configurar rede em servidores Ubuntu 24.04
+  import_playbook: network_config.yml

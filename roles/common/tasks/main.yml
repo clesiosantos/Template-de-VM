@@ -1,0 +1,20 @@
+---
+# Tarefas comuns para todos os servidores
+
+# Atualização de pacotes
+- name: Atualizar cache de pacotes
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Atualizar todos os pacotes
+  apt:
+    upgrade: full
+    autoremove: yes
+    autoclean: yes
+
+# Instalação de pacotes básicos de rede
+- name: Instalar pacotes básicos de rede
+  apt:
+    name: "{{ pacotes_rede }}"
+    state: present

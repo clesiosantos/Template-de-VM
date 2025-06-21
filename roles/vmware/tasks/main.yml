@@ -1,0 +1,3 @@
+---
+# Valores padrão para a role vmware
+install_vmware_tools: true

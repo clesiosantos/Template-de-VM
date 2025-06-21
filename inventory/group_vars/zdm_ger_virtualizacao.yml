@@ -1,0 +1,8 @@
+---
+network_name: "zdm-ger-virtualizacao"
+network_prefix: "192.168.12"
+ip_address: "192.168.12.101/24"  # Usado apenas se auto_assign_ip for false
+gateway: "192.168.12.1"
+dns_servers: 
+  - "192.168.11.51"
+novo_hostname: "zdm-virt"  # O número do IP será adicionado automaticamente

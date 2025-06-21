@@ -1,0 +1,22 @@
+---
+# Variáveis globais para todos os hosts
+pacotes_rede:
+  - net-tools
+  - tcpdump
+  - nmap
+  - traceroute
+  - whois
+  - dnsutils
+  - netcat
+  - curl
+  - wget
+  - telnet
+  - iperf3
+
+# Configuração padrão de atribuição de IP
+auto_assign_ip: true
+start_ip: 101
+end_ip: 254
+
+# Interface de rede padrão
+interface_rede: "ens192"

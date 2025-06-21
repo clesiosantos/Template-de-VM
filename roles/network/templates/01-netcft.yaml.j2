@@ -1,0 +1,14 @@
+# Configuração de rede para {{ network_name }}
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    {{ interface_rede }}:
+      dhcp4: no
+      addresses:
+        - {{ ip_address }}
+      routes:
+        - to: default
+          via: {{ gateway }}
+      nameservers:
+        addresses: {{ dns_servers }}
