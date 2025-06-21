@@ -16,7 +16,7 @@ function check_ansible_installation {
 }
 
 function usage {
-    echo "Uso: $0 [rede] [host] [--manual-ip IP]"
+    echo "Uso: $0 [rede] [host] [--manual-ip IP] [--gateway GW]"
     echo "Redes disponíveis:"
     echo "  servidores-1608"
     echo "  zdm-abaixofw-1104"
@@ -27,6 +27,7 @@ function usage {
     echo ""
     echo "Host: opcional, nome do host específico a ser configurado"
     echo "--manual-ip: opcional, para definir um IP específico (desativa a atribuição automática)"
+    echo "--gateway: opcional, para definir um gateway específico"
     exit 1
 }
 
@@ -41,13 +42,26 @@ REDE=$1
 HOST=$2
 MANUAL_IP=""
 AUTO_ASSIGN="true"
+CUSTOM_GATEWAY=""
 
-# Verificar se há parâmetro de IP manual
-for arg in "$@"; do
-    if [[ $arg == "--manual-ip" ]]; then
-        AUTO_ASSIGN="false"
-        MANUAL_IP=${@: $OPTIND:1}
-    fi
+# Verificar parâmetros adicionais
+shift 2
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --manual-ip)
+            AUTO_ASSIGN="false"
+            MANUAL_IP="$2"
+            shift 2
+            ;;
+        --gateway)
+            CUSTOM_GATEWAY="$2"
+            shift 2
+            ;;
+        *)
+            echo "Parâmetro desconhecido: $1"
+            usage
+            ;;
+    esac
 done
 
 # Criar diretório de registro de IPs se não existir
@@ -102,6 +116,10 @@ fi
 
 if [ ! -z "$NETWORK_NAME" ] && [ ! -z "$NETWORK_PREFIX" ]; then
     EXTRA_VARS="$EXTRA_VARS network_name=$NETWORK_NAME network_prefix=$NETWORK_PREFIX"
+fi
+
+if [ ! -z "$CUSTOM_GATEWAY" ]; then
+    EXTRA_VARS="$EXTRA_VARS gateway=$CUSTOM_GATEWAY"
 fi
 
 ansible-playbook playbooks/main.yml -i inventory/hosts.ini -l $LIMIT -e "$EXTRA_VARS"

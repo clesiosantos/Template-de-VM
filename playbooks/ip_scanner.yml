@@ -1,7 +1,7 @@
 ---
 - name: Verificar IPs disponíveis na rede
   hosts: localhost
-  gather_facts: no
+  gather_facts: yes
   vars:
     start_ip: 101
     end_ip: 254
@@ -33,10 +33,20 @@
       set_fact:
         ips_to_check: "{{ range(start_ip, end_ip + 1) | list }}"
         
+    - name: Extrair valores numéricos dos IPs registrados
+      set_fact:
+        registered_ip_values: []
+      
+    - name: Processar cada valor no registro
+      set_fact:
+        registered_ip_values: "{{ registered_ip_values + [item.value | string | regex_replace('[^0-9]', '') | int] }}"
+      loop: "{{ ip_registry | dict2items }}"
+      when: ip_registry != {}
+        
     - name: Remover IPs já registrados da lista de verificação
       set_fact:
-        ips_to_check: "{{ ips_to_check | difference(ip_registry.values() | map('regex_search', '\d+$') | map('int') | list) }}"
-      when: ip_registry != {}
+        ips_to_check: "{{ ips_to_check | difference(registered_ip_values) }}"
+      when: registered_ip_values is defined and registered_ip_values | length > 0
         
     - name: Verificar IPs disponíveis com ping
       shell: "ping -c 1 -W 1 {{ network_prefix }}.{{ item }} > /dev/null 2>&1 || echo {{ item }}"
@@ -71,4 +81,6 @@
       
     - name: Registrar IP como "pendente" no arquivo de registro
       copy:
-        content: "{{ ip_registry | combine
+        content: "{{ ip_registry | combine({ansible_date_time.iso8601_basic_short: first_available_ip}) | to_nice_json }}"
+        dest: "{{ ip_registry_file }}"
+      when: first_available_ip is defined and first_available_ip != ''
