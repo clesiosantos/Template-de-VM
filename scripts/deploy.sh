@@ -1,31 +1,16 @@
 #!/bin/bash
 
-# Script para facilitar a execução dos playbooks de configuração de rede
-
-function check_ansible_installation {
-    if ! command -v ansible-playbook &> /dev/null; then
-        echo "Ansible não encontrado. Instalando..."
-        sudo apt update
-        sudo apt install -y software-properties-common
-        sudo add-apt-repository --yes --update ppa:ansible/ansible
-        sudo apt install -y ansible
-        echo "Ansible instalado com sucesso!"
-    else
-        echo "Ansible já está instalado."
-    fi
-}
+# Script para configurar rede em servidores Ubuntu
 
 function usage {
-    echo "Uso: $0 [rede] [host] [--manual-ip IP] [--gateway GW]"
+    echo "Uso: $0 [rede] [--manual-ip IP] [--gateway GW]"
     echo "Redes disponíveis:"
     echo "  servidores-1608"
     echo "  zdm-abaixofw-1104"
     echo "  zdm-desenvolvimento"
     echo "  zdm-homolog"
     echo "  zdm-ger-virtualizacao"
-    echo "  all - para todas as redes"
     echo ""
-    echo "Host: opcional, nome do host específico a ser configurado"
     echo "--manual-ip: opcional, para definir um IP específico (desativa a atribuição automática)"
     echo "--gateway: opcional, para definir um gateway específico"
     exit 1
@@ -35,17 +20,13 @@ if [ $# -lt 1 ]; then
     usage
 fi
 
-# Verificar e instalar Ansible se necessário
-check_ansible_installation
-
 REDE=$1
-HOST=$2
 MANUAL_IP=""
 AUTO_ASSIGN="true"
 CUSTOM_GATEWAY=""
 
 # Verificar parâmetros adicionais
-shift 2
+shift 1
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --manual-ip)
@@ -69,34 +50,39 @@ mkdir -p ip_registry
 
 case $REDE in
     servidores-1608)
-        LIMIT="servidores_1608"
         NETWORK_NAME="servidores-1608"
         NETWORK_PREFIX="192.168.11"
+        GATEWAY="${CUSTOM_GATEWAY:-192.168.11.1}"
+        DNS_SERVERS="192.168.11.51"
+        HOSTNAME_PREFIX="srv-1608"
         ;;
     zdm-abaixofw-1104)
-        LIMIT="zdm_abaixofw_1104"
         NETWORK_NAME="zdm-abaixofw-1104"
         NETWORK_PREFIX="177.184.13"
+        GATEWAY="${CUSTOM_GATEWAY:-177.184.13.1}"
+        DNS_SERVERS="201.49.216.57 201.49.216.58"
+        HOSTNAME_PREFIX="zdm-fw"
         ;;
     zdm-desenvolvimento)
-        LIMIT="zdm_desenvolvimento"
         NETWORK_NAME="zdm-desenvolvimento"
         NETWORK_PREFIX="192.168.14"
+        GATEWAY="${CUSTOM_GATEWAY:-192.168.14.1}"
+        DNS_SERVERS="192.168.11.51"
+        HOSTNAME_PREFIX="zdm-dev"
         ;;
     zdm-homolog)
-        LIMIT="zdm_homolog"
         NETWORK_NAME="zdm-homolog"
         NETWORK_PREFIX="192.168.15"
+        GATEWAY="${CUSTOM_GATEWAY:-192.168.15.1}"
+        DNS_SERVERS="192.168.11.51"
+        HOSTNAME_PREFIX="zdm-hml"
         ;;
     zdm-ger-virtualizacao)
-        LIMIT="zdm_ger_virtualizacao"
         NETWORK_NAME="zdm-ger-virtualizacao"
         NETWORK_PREFIX="192.168.12"
-        ;;
-    all)
-        LIMIT="all"
-        NETWORK_NAME=""
-        NETWORK_PREFIX=""
+        GATEWAY="${CUSTOM_GATEWAY:-192.168.12.1}"
+        DNS_SERVERS="192.168.11.51"
+        HOSTNAME_PREFIX="zdm-virt"
         ;;
     *)
         echo "Rede desconhecida: $REDE"
@@ -104,22 +90,149 @@ case $REDE in
         ;;
 esac
 
-if [ ! -z "$HOST" ]; then
-    LIMIT="$HOST"
+# Determinar o IP a ser usado
+if [ "$AUTO_ASSIGN" = "true" ]; then
+    # Verificar IPs disponíveis
+    echo "Verificando IPs disponíveis na rede $NETWORK_NAME ($NETWORK_PREFIX.0/24)..."
+    
+    # Verificar se o arquivo de registro existe
+    REGISTRY_FILE="ip_registry/${NETWORK_NAME}.json"
+    if [ ! -f "$REGISTRY_FILE" ]; then
+        echo "{}" > "$REGISTRY_FILE"
+    fi
+    
+    # Ler IPs já registrados
+    REGISTERED_IPS=$(grep -o '"[0-9]\+"' "$REGISTRY_FILE" 2>/dev/null | tr -d '"' | sort -n)
+    
+    # Inicializar array de IPs para verificar
+    START_IP=101
+    END_IP=254
+    declare -a IPS_TO_CHECK
+    for ((i=START_IP; i<=END_IP; i++)); do
+        # Verificar se o IP já está registrado
+        if ! echo "$REGISTERED_IPS" | grep -q "^$i$"; then
+            IPS_TO_CHECK+=($i)
+        fi
+    done
+    
+    # Verificar IPs disponíveis
+    AVAILABLE_IPS=()
+    for IP in "${IPS_TO_CHECK[@]}"; do
+        echo -n "Verificando $NETWORK_PREFIX.$IP... "
+        if ! ping -c 1 -W 1 $NETWORK_PREFIX.$IP > /dev/null 2>&1; then
+            echo "disponível"
+            AVAILABLE_IPS+=($IP)
+        else
+            echo "em uso"
+        fi
+    done
+    
+    # Verificar se há IPs disponíveis
+    if [ ${#AVAILABLE_IPS[@]} -eq 0 ]; then
+        echo "Não há IPs disponíveis na rede $NETWORK_NAME. Abortando."
+        exit 1
+    fi
+    
+    # Usar o primeiro IP disponível
+    IP_LAST_OCTET=${AVAILABLE_IPS[0]}
+    IP_ADDRESS="$NETWORK_PREFIX.$IP_LAST_OCTET/24"
+    
+    echo "Usando IP disponível: $IP_ADDRESS"
+else
+    # Usar o IP manual
+    IP_ADDRESS="$MANUAL_IP"
+    IP_LAST_OCTET=$(echo "$MANUAL_IP" | grep -o '[0-9]\+' | tail -1)
+    
+    echo "Usando IP manual: $IP_ADDRESS"
 fi
 
-EXTRA_VARS="auto_assign_ip=$AUTO_ASSIGN"
+# Definir o hostname
+HOSTNAME="${HOSTNAME_PREFIX}-${IP_LAST_OCTET}"
 
-if [ "$AUTO_ASSIGN" == "false" ] && [ ! -z "$MANUAL_IP" ]; then
-    EXTRA_VARS="$EXTRA_VARS ip_address=$MANUAL_IP"
+echo "Configurando a máquina com:"
+echo "  IP: $IP_ADDRESS"
+echo "  Gateway: $GATEWAY"
+echo "  DNS: $DNS_SERVERS"
+echo "  Hostname: $HOSTNAME"
+echo ""
+
+# Configurar hostname
+echo "Configurando hostname..."
+sudo hostnamectl set-hostname $HOSTNAME
+
+# Atualizar /etc/hosts
+echo "Atualizando /etc/hosts..."
+sudo sed -i "s/^127\.0\.1\.1.*/127.0.1.1 $HOSTNAME/" /etc/hosts
+
+# Gerar o arquivo de configuração Netplan
+echo "Configurando rede com Netplan..."
+NETPLAN_CONFIG="# Configuração de rede para $NETWORK_NAME
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    ens192:
+      dhcp4: no
+      addresses:
+        - $IP_ADDRESS
+      routes:
+        - to: default
+          via: $GATEWAY
+      nameservers:
+        addresses: [$DNS_SERVERS]
+"
+
+# Criar o arquivo de configuração Netplan
+sudo mkdir -p /etc/netplan
+echo "$NETPLAN_CONFIG" | sudo tee /etc/netplan/01-netcfg.yaml > /dev/null
+sudo chmod 644 /etc/netplan/01-netcfg.yaml
+sudo netplan apply
+
+# Atualizar pacotes
+echo "Atualizando pacotes..."
+sudo apt update
+
+# Instalar pacotes básicos de rede
+echo "Instalando pacotes básicos de rede..."
+sudo apt install -y net-tools tcpdump nmap traceroute whois dnsutils netcat curl wget telnet iperf3
+
+# Instalar VMware Tools se necessário
+echo "Verificando se é necessário instalar VMware Tools..."
+if sudo dmidecode -s system-product-name | grep -q 'VMware'; then
+    echo "Instalando VMware Tools..."
+    sudo apt install -y open-vm-tools open-vm-tools-desktop
 fi
 
-if [ ! -z "$NETWORK_NAME" ] && [ ! -z "$NETWORK_PREFIX" ]; then
-    EXTRA_VARS="$EXTRA_VARS network_name=$NETWORK_NAME network_prefix=$NETWORK_PREFIX"
+# Registrar IP como atribuído
+REGISTRY_FILE="ip_registry/${NETWORK_NAME}.json"
+if [ -f "$REGISTRY_FILE" ]; then
+    HOSTNAME_SHORT=$(hostname -s)
+    if command -v jq > /dev/null; then
+        TEMP_FILE=$(mktemp)
+        jq '. + {"'$HOSTNAME_SHORT'": "'$IP_LAST_OCTET'"}' "$REGISTRY_FILE" > "$TEMP_FILE"
+        mv "$TEMP_FILE" "$REGISTRY_FILE"
+    else
+        # Abordagem alternativa sem jq
+        CONTENT=$(cat "$REGISTRY_FILE")
+        # Remover a última chave
+        CONTENT=${CONTENT%}}
+        # Adicionar a nova entrada
+        if [ "$CONTENT" = "{" ]; then
+            # Arquivo vazio
+            CONTENT="$CONTENT"$HOSTNAME_SHORT": "$IP_LAST_OCTET"}"
+        else
+            # Arquivo com conteúdo
+            CONTENT="$CONTENT, "$HOSTNAME_SHORT": "$IP_LAST_OCTET"}"
+        fi
+        echo "$CONTENT" > "$REGISTRY_FILE"
+    fi
 fi
 
-if [ ! -z "$CUSTOM_GATEWAY" ]; then
-    EXTRA_VARS="$EXTRA_VARS gateway=$CUSTOM_GATEWAY"
+# Verificar se reboot é necessário
+if [ -f /var/run/reboot-required ]; then
+    echo "Reinicialização necessária. Reiniciando em 10 segundos..."
+    sleep 10
+    sudo reboot
+else
+    echo "Configuração concluída com sucesso!"
 fi
-
-ansible-playbook playbooks/main.yml -i inventory/hosts.ini -l $LIMIT -e "$EXTRA_VARS"
