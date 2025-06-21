@@ -12,6 +12,7 @@ Cada arquivo segue o formato:
   "hostname2": "102",
   "20230615T120000": "103"  // IP reservado mas ainda não atribuído
 }
+```
 
 Os IPs são armazenados como o último octeto apenas (por exemplo, "101" para 192.168.11.101).
 
@@ -115,3 +116,4 @@ if [ ! -z "$NETWORK_NAME" ] && [ ! -z "$NETWORK_PREFIX" ]; then
 fi
 
 ansible-playbook playbooks/main.yml -i inventory/hosts.ini -l $LIMIT -e "$EXTRA_VARS"
+```

@@ -71,6 +71,4 @@
       
     - name: Registrar IP como "pendente" no arquivo de registro
       copy:
-        content: "{{ ip_registry | combine({ansible_date_time.iso8601_basic_short: first_available_ip}) | to_nice_json }}"
-        dest: "{{ ip_registry_file }}"
-      when: first_available_ip is defined and first_available_ip != ''
+        content: "{{ ip_registry | combine

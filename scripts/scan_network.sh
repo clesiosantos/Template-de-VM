@@ -2,6 +2,19 @@
 
 # Script para verificar IPs disponíveis em uma rede
 
+function check_ansible_installation {
+    if ! command -v ansible-playbook &> /dev/null; then
+        echo "Ansible não encontrado. Instalando..."
+        sudo apt update
+        sudo apt install -y software-properties-common
+        sudo add-apt-repository --yes --update ppa:ansible/ansible
+        sudo apt install -y ansible
+        echo "Ansible instalado com sucesso!"
+    else
+        echo "Ansible já está instalado."
+    fi
+}
+
 function usage {
     echo "Uso: $0 [rede]"
     echo "Redes disponíveis:"
@@ -16,6 +29,9 @@ function usage {
 if [ $# -lt 1 ]; then
     usage
 fi
+
+# Verificar e instalar Ansible se necessário
+check_ansible_installation
 
 REDE=$1
 
