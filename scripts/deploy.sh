@@ -3,7 +3,7 @@
 # Script para configurar rede em servidores Ubuntu
 
 function usage {
-    echo "Uso: $0 [rede] [--manual-ip IP] [--gateway GW]"
+    echo "Uso: $0 [rede] [opções]"
     echo "Redes disponíveis:"
     echo "  servidores-1608"
     echo "  zdm-abaixofw-1104"
@@ -11,8 +11,11 @@ function usage {
     echo "  zdm-homolog"
     echo "  zdm-ger-virtualizacao"
     echo ""
-    echo "--manual-ip: opcional, para definir um IP específico (desativa a atribuição automática)"
-    echo "--gateway: opcional, para definir um gateway específico"
+    echo "Opções:"
+    echo "  --manual-ip IP    : Define um IP específico (desativa a atribuição automática)"
+    echo "  --gateway GW      : Define um gateway específico"
+    echo "  --hostname NOME   : Define um hostname personalizado (sem o sufixo numérico)"
+    echo "  --full-hostname NOME : Define um hostname completo (ignora o padrão da rede e o sufixo numérico)"
     exit 1
 }
 
@@ -24,6 +27,8 @@ REDE=$1
 MANUAL_IP=""
 AUTO_ASSIGN="true"
 CUSTOM_GATEWAY=""
+CUSTOM_HOSTNAME=""
+FULL_HOSTNAME=""
 
 # Verificar parâmetros adicionais
 shift 1
@@ -36,6 +41,14 @@ while [ "$#" -gt 0 ]; do
             ;;
         --gateway)
             CUSTOM_GATEWAY="$2"
+            shift 2
+            ;;
+        --hostname)
+            CUSTOM_HOSTNAME="$2"
+            shift 2
+            ;;
+        --full-hostname)
+            FULL_HOSTNAME="$2"
             shift 2
             ;;
         *)
@@ -54,35 +67,35 @@ case $REDE in
         NETWORK_PREFIX="192.168.11"
         GATEWAY="${CUSTOM_GATEWAY:-192.168.11.1}"
         DNS_SERVERS="192.168.11.51"
-        HOSTNAME_PREFIX="srv-1608"
+        HOSTNAME_PREFIX="${CUSTOM_HOSTNAME:-srv-1608}"
         ;;
     zdm-abaixofw-1104)
         NETWORK_NAME="zdm-abaixofw-1104"
         NETWORK_PREFIX="177.184.13"
         GATEWAY="${CUSTOM_GATEWAY:-177.184.13.1}"
         DNS_SERVERS="201.49.216.57 201.49.216.58"
-        HOSTNAME_PREFIX="zdm-fw"
+        HOSTNAME_PREFIX="${CUSTOM_HOSTNAME:-zdm-fw}"
         ;;
     zdm-desenvolvimento)
         NETWORK_NAME="zdm-desenvolvimento"
         NETWORK_PREFIX="192.168.14"
         GATEWAY="${CUSTOM_GATEWAY:-192.168.14.1}"
         DNS_SERVERS="192.168.11.51"
-        HOSTNAME_PREFIX="zdm-dev"
+        HOSTNAME_PREFIX="${CUSTOM_HOSTNAME:-zdm-dev}"
         ;;
     zdm-homolog)
         NETWORK_NAME="zdm-homolog"
         NETWORK_PREFIX="192.168.15"
         GATEWAY="${CUSTOM_GATEWAY:-192.168.15.1}"
         DNS_SERVERS="192.168.11.51"
-        HOSTNAME_PREFIX="zdm-hml"
+        HOSTNAME_PREFIX="${CUSTOM_HOSTNAME:-zdm-hml}"
         ;;
     zdm-ger-virtualizacao)
         NETWORK_NAME="zdm-ger-virtualizacao"
         NETWORK_PREFIX="192.168.12"
         GATEWAY="${CUSTOM_GATEWAY:-192.168.12.1}"
         DNS_SERVERS="192.168.11.51"
-        HOSTNAME_PREFIX="zdm-virt"
+        HOSTNAME_PREFIX="${CUSTOM_HOSTNAME:-zdm-virt}"
         ;;
     *)
         echo "Rede desconhecida: $REDE"
@@ -147,7 +160,13 @@ else
 fi
 
 # Definir o hostname
-HOSTNAME="${HOSTNAME_PREFIX}-${IP_LAST_OCTET}"
+if [ -n "$FULL_HOSTNAME" ]; then
+    # Usar o hostname completo personalizado
+    HOSTNAME="$FULL_HOSTNAME"
+else
+    # Usar o prefixo da rede + último octeto do IP
+    HOSTNAME="${HOSTNAME_PREFIX}-${IP_LAST_OCTET}"
+fi
 
 echo "Configurando a máquina com:"
 echo "  IP: $IP_ADDRESS"
